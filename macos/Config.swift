@@ -47,6 +47,19 @@ func colorFor(_ appName: String, text: String = "", in config: Config) -> String
     config.rules?.first { text.contains($0.contains) }?.color ?? config.apps[appName]
 }
 
+private func captureConfigErrors(_ body: () -> Bool) -> (passed: Bool, message: String)? {
+    let pipe = Pipe()
+    let original = dup(STDERR_FILENO)
+    guard original >= 0 else { return nil }
+    defer { _ = dup2(original, STDERR_FILENO); close(original) }
+    guard dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO) >= 0 else { return nil }
+    let passed = body()
+    guard dup2(original, STDERR_FILENO) >= 0 else { return nil }
+    pipe.fileHandleForWriting.closeFile()
+    let message = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    return (passed, message)
+}
+
 private func withConfigTest(_ body: (URL) throws -> Bool) -> Bool {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -95,7 +108,9 @@ let configSelfTests: [String: () -> Bool] = [
         withConfigTest { url in
             let data = Data("{".utf8)
             try data.write(to: url)
-            return try loadConfig(at: url) == nil && Data(contentsOf: url) == data
+            guard let result = captureConfigErrors({ loadConfig(at: url) == nil }) else { return false }
+            return try result.passed && result.message == "設定ファイルを読み込めません\n"
+                && Data(contentsOf: url) == data
         }
     },
     "A6": {
@@ -105,6 +120,20 @@ let configSelfTests: [String: () -> Bool] = [
             ensureDefaultConfig(at: url)
             ensureDefaultConfig(at: url)
             return try Data(contentsOf: url) == data
+        }
+    },
+    "A7": {
+        withConfigTest { url in
+            let parent = url.deletingLastPathComponent().appendingPathComponent("blocked")
+            let data = Data("keep this file".utf8)
+            try data.write(to: parent)
+            let target = parent.appendingPathComponent("config.json")
+            guard let result = captureConfigErrors({
+                ensureDefaultConfig(at: target)
+                return !FileManager.default.fileExists(atPath: target.path)
+            }) else { return false }
+            return try result.passed && result.message == "既定の設定ファイルを作成できません\n"
+                && Data(contentsOf: parent) == data
         }
     },
     "C1": {
