@@ -238,6 +238,7 @@ sealed class Glow : Form
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
         var wanted = name.Trim().TrimStart('\\', '.');
+        if (wanted.Length == 0) return null;
         var index = Array.FindIndex(displays, d => string.Equals(d.Device.TrimStart('\\', '.'), wanted, StringComparison.OrdinalIgnoreCase));
         if (index < 0) index = Array.FindIndex(displays, d => d.Monitor.Contains(wanted, StringComparison.OrdinalIgnoreCase));
         return index < 0 ? null : index;
