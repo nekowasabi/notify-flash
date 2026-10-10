@@ -1,12 +1,31 @@
 import Cocoa
 
-let glowBorderWidth: CGFloat = 6 // PoC-derived estimate; not calibrated on hardware.
 let glowOpacity: CGFloat = 0.8 // PoC-derived estimate; not calibrated on hardware.
-let glowOnMilliseconds = 150 // PoC-derived estimate; not calibrated on hardware.
-let glowOffMilliseconds = 250 // PoC-derived estimate; not calibrated on hardware.
 
-func flashSchedule(count: Int, reduceMotion: Bool) -> [(on: Int, off: Int)] {
-    Array(repeating: (on: glowOnMilliseconds, off: glowOffMilliseconds), count: reduceMotion ? 1 : max(0, count))
+enum GlowStyle: String {
+    case soft, breath, orbit, corner
+
+    // Seconds per repetition. Taken from the design mock; not calibrated on hardware.
+    var cycle: Double {
+        switch self {
+        case .soft: return 0.9
+        case .breath: return 1.6
+        case .orbit: return 1.6
+        case .corner: return 1.5
+        }
+    }
+}
+
+func glowStyle(_ name: String?) -> GlowStyle {
+    GlowStyle(rawValue: name ?? "") ?? .soft
+}
+
+func flashCount(count: Int, reduceMotion: Bool) -> Int {
+    reduceMotion ? 1 : max(0, count)
+}
+
+func glowDuration(style: GlowStyle, count: Int) -> Double {
+    style.cycle * Double(count)
 }
 
 func axToScreenPoint(_ p: CGPoint, primaryHeight: CGFloat) -> CGPoint {
@@ -59,7 +78,135 @@ func focusedScreenIndex() -> Int {
     return pickScreen(point: axToScreenPoint(center, primaryHeight: primary.height), frames: frames)
 }
 
-func flash(color: NSColor, count: Int) {
+// Inner glow: the shadow of a ring lying just outside the screen bleeds inward.
+private func innerGlow(_ bounds: CGRect, color: CGColor, radius: CGFloat) -> CALayer {
+    let layer = CALayer()
+    layer.frame = bounds
+    let outer = CGPath(rect: bounds.insetBy(dx: -radius * 3, dy: -radius * 3), transform: nil)
+    layer.shadowPath = outer.subtracting(CGPath(rect: bounds, transform: nil))
+    layer.shadowColor = color
+    layer.shadowOpacity = 1
+    layer.shadowRadius = radius
+    layer.shadowOffset = .zero
+    return layer
+}
+
+private func softGlow(_ bounds: CGRect, color: CGColor) -> CALayer {
+    let layer = CALayer()
+    layer.frame = bounds
+    layer.addSublayer(innerGlow(bounds, color: color, radius: 40))
+    layer.addSublayer(innerGlow(bounds, color: color, radius: 8))
+    return layer
+}
+
+// Four gradients fading from each edge toward the center. The layer is not flipped: y = 1 is the top.
+private func edgeGradients(_ b: CGRect, color: CGColor, depth: CGFloat) -> CALayer {
+    let layer = CALayer()
+    layer.frame = b
+    let clear = color.copy(alpha: 0) ?? color
+    let edges: [(CGRect, CGPoint, CGPoint)] = [
+        (CGRect(x: 0, y: b.height - depth, width: b.width, height: depth), CGPoint(x: 0.5, y: 1), CGPoint(x: 0.5, y: 0)),
+        (CGRect(x: 0, y: 0, width: b.width, height: depth), CGPoint(x: 0.5, y: 0), CGPoint(x: 0.5, y: 1)),
+        (CGRect(x: 0, y: 0, width: depth, height: b.height), CGPoint(x: 0, y: 0.5), CGPoint(x: 1, y: 0.5)),
+        (CGRect(x: b.width - depth, y: 0, width: depth, height: b.height), CGPoint(x: 1, y: 0.5), CGPoint(x: 0, y: 0.5)),
+    ]
+    for (frame, start, end) in edges {
+        let gradient = CAGradientLayer()
+        gradient.frame = frame
+        gradient.colors = [color, clear]
+        gradient.startPoint = start
+        gradient.endPoint = end
+        layer.addSublayer(gradient)
+    }
+    return layer
+}
+
+// Opacity rises from 0 to peak and falls back once per cycle, repeated count times.
+private func pulse(count: Int, cycle: Double, rise: Double, peak: Float) -> CAKeyframeAnimation {
+    let animation = CAKeyframeAnimation(keyPath: "opacity")
+    var values: [Float] = []
+    var times: [NSNumber] = []
+    for i in 0..<count {
+        let base = Double(i) / Double(count)
+        values += [0, peak, 0]
+        times += [base, base + rise / Double(count), base + 1 / Double(count)].map { NSNumber(value: $0) }
+    }
+    animation.values = values
+    animation.keyTimes = times
+    animation.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: values.count - 1)
+    animation.duration = cycle * Double(count)
+    return animation
+}
+
+private func glowLayer(style: GlowStyle, bounds b: CGRect, color: CGColor, count: Int) -> CALayer {
+    let black = CGColor(gray: 0, alpha: 1)
+    let layer: CALayer
+    switch style {
+    case .soft:
+        layer = softGlow(b, color: color)
+        layer.add(pulse(count: count, cycle: style.cycle, rise: 1.0 / 3, peak: 1), forKey: "glow")
+    case .breath:
+        layer = edgeGradients(b, color: color, depth: 160)
+        layer.add(pulse(count: count, cycle: style.cycle, rise: 0.5, peak: 0.85), forKey: "glow")
+    case .orbit:
+        layer = CALayer()
+        layer.frame = b
+        let side = hypot(b.width, b.height)
+        let clear = color.copy(alpha: 0) ?? color
+        let conic = CAGradientLayer()
+        conic.type = .conic
+        conic.bounds = CGRect(x: 0, y: 0, width: side, height: side)
+        conic.position = CGPoint(x: b.midX, y: b.midY)
+        conic.startPoint = CGPoint(x: 0.5, y: 0.5)
+        conic.endPoint = CGPoint(x: 0.5, y: 0)
+        conic.colors = [color, clear, clear, color, clear, clear, color]
+        conic.locations = [0, 0.2, 0.3, 0.5, 0.7, 0.8, 1]
+        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+        spin.fromValue = 0
+        spin.toValue = -2 * Double.pi
+        spin.duration = style.cycle
+        spin.repeatCount = Float(count)
+        conic.add(spin, forKey: "spin")
+        layer.addSublayer(conic)
+        // Why: Gradient edges as the mask keep the band soft without Core Image filters.
+        layer.mask = edgeGradients(b, color: black, depth: 36)
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [0, 1, 1, 0]
+        fade.keyTimes = [0, 0.1, 0.8, 1]
+        fade.duration = glowDuration(style: style, count: count)
+        layer.add(fade, forKey: "glow")
+    case .corner:
+        layer = softGlow(b, color: color)
+        let diameter = hypot(b.width, b.height) * 2
+        let mask = CAGradientLayer()
+        mask.type = .radial
+        mask.bounds = CGRect(x: 0, y: 0, width: diameter, height: diameter)
+        mask.position = CGPoint(x: b.maxX, y: b.maxY)
+        mask.colors = [black, black, CGColor(gray: 0, alpha: 0)]
+        mask.locations = [0, 0.75, 1]
+        mask.startPoint = CGPoint(x: 0.5, y: 0.5)
+        mask.endPoint = CGPoint(x: 1, y: 1)
+        let spread = CAKeyframeAnimation(keyPath: "transform.scale")
+        spread.values = [0.01, 1, 1]
+        spread.keyTimes = [0, 0.6, 1]
+        spread.timingFunctions = [CAMediaTimingFunction(name: .easeOut), CAMediaTimingFunction(name: .linear)]
+        spread.duration = style.cycle
+        spread.repeatCount = Float(count)
+        mask.add(spread, forKey: "spread")
+        layer.mask = mask
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0]
+        fade.keyTimes = [0, 0.6, 1]
+        fade.duration = style.cycle
+        fade.repeatCount = Float(count)
+        layer.add(fade, forKey: "glow")
+    }
+    // Why: The model value stays 0 so nothing remains visible if the animation ends before the window hides.
+    layer.opacity = 0
+    return layer
+}
+
+func flash(color: NSColor, count: Int, style: GlowStyle = .soft) {
     glowGeneration += 1
     let generation = glowGeneration
     glowWindow?.orderOut(nil)
@@ -74,42 +221,45 @@ func flash(color: NSColor, count: Int) {
         window.level = .screenSaver
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentView?.wantsLayer = true
-        window.contentView?.layer?.borderWidth = glowBorderWidth
         glowWindow = window
     }
     glowWindow?.setFrame(screen.frame, display: false)
-    glowWindow?.contentView?.layer?.borderColor = color.withAlphaComponent(glowOpacity).cgColor
-    let schedule = flashSchedule(count: count, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-    var offset = 0
-    for step in schedule {
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(offset)) {
-            guard generation == glowGeneration else { return }
-            glowWindow?.orderFrontRegardless()
-        }
-        offset += step.on
-        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(offset)) {
-            guard generation == glowGeneration else { return }
-            glowWindow?.orderOut(nil)
-        }
-        offset += step.off
+    guard let root = glowWindow?.contentView?.layer else { return }
+    let n = flashCount(count: count, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+    guard n > 0 else { return }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    root.sublayers?.forEach { $0.removeFromSuperlayer() }
+    let layer = glowLayer(style: style, bounds: CGRect(origin: .zero, size: screen.frame.size),
+                          color: color.withAlphaComponent(glowOpacity).cgColor, count: n)
+    root.addSublayer(layer)
+    CATransaction.commit()
+    glowWindow?.orderFrontRegardless()
+    DispatchQueue.main.asyncAfter(deadline: .now() + glowDuration(style: style, count: n)) {
+        guard generation == glowGeneration else { return }
+        glowWindow?.orderOut(nil)
+        layer.removeFromSuperlayer()
     }
 }
 
 func hideGlow() {
     glowGeneration += 1
     glowWindow?.orderOut(nil)
+    glowWindow?.contentView?.layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
 }
 
 let glowSelfTests: [String: () -> Bool] = [
     "C3": {
-        for (count, reduceMotion, expectedCount) in [(3, false, 3), (1, false, 1), (3, true, 1)] {
-            let schedule = flashSchedule(count: count, reduceMotion: reduceMotion)
-            guard schedule.count == expectedCount,
-                  schedule.allSatisfy({ $0.on == 150 && $0.off == 250 }) else { return false }
+        for (count, reduceMotion, expected) in [(3, false, 3), (1, false, 1), (3, true, 1), (0, false, 0)] {
+            guard flashCount(count: count, reduceMotion: reduceMotion) == expected else { return false }
         }
-        return true
+        return abs(glowDuration(style: .soft, count: 3) - 2.7) < 1e-9
+            && abs(glowDuration(style: .breath, count: 2) - 3.2) < 1e-9
     },
-    "C4": { glowBorderWidth == 6 && glowOpacity == 0.8 },
+    "C4": {
+        glowOpacity == 0.8 && glowStyle(nil) == .soft && glowStyle("bad") == .soft
+            && glowStyle("breath") == .breath && glowStyle("orbit") == .orbit && glowStyle("corner") == .corner
+    },
     "S1": {
         let frames = [CGRect(x: 0, y: 0, width: 1000, height: 800), CGRect(x: 0, y: 800, width: 1000, height: 600)]
         let above = axToScreenPoint(CGPoint(x: 500, y: -300), primaryHeight: 800)

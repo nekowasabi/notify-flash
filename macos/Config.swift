@@ -9,6 +9,7 @@ struct Config: Codable {
     var count: Int
     var apps: [String: String]
     var rules: [Rule]? = nil
+    var style: String? = nil
 }
 
 let configURL = FileManager.default.homeDirectoryForCurrentUser

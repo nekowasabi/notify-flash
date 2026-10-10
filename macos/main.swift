@@ -26,9 +26,10 @@ func glowRequest(app: String, text: String = "", enabled: Bool, config: Config?)
 
 func handleBanner(app: String, text: String) {
     print(app)
-    guard let request = glowRequest(app: app, text: text, enabled: glowEnabled, config: loadConfig(at: configURL)),
+    let config = loadConfig(at: configURL)
+    guard let request = glowRequest(app: app, text: text, enabled: glowEnabled, config: config),
           let color = parseHexColor(request.color) else { return }
-    flash(color: color, count: request.count)
+    flash(color: color, count: request.count, style: glowStyle(config?.style))
 }
 
 func integrationSelfTests() -> [String: () -> Bool] {
@@ -51,12 +52,13 @@ func integrationSelfTests() -> [String: () -> Bool] {
 }
 
 if CommandLine.arguments.dropFirst().first == "--flash-test" {
-    guard CommandLine.arguments.count == 3, let color = parseHexColor(CommandLine.arguments[2]) else { exit(2) }
+    let args = CommandLine.arguments
+    guard (3...4).contains(args.count), let color = parseHexColor(args[2]) else { exit(2) }
+    let style = glowStyle(args.count == 4 ? args[3] : nil)
     NSApplication.shared.setActivationPolicy(.accessory)
-    flash(color: color, count: 1)
-    let duration = flashSchedule(count: 1, reduceMotion: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
-        .reduce(0) { $0 + $1.on + $1.off }
-    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(duration)) { exit(0) }
+    flash(color: color, count: 1, style: style)
+    let duration = glowDuration(style: style, count: 1)
+    DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1) { exit(0) }
     NSApplication.shared.run()
 }
 
