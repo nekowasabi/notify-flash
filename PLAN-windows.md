@@ -82,8 +82,10 @@ macOS 版と同じ体験を Windows で実現する。通知バナーが出た�
 機械検証（Windows 上）:
 
 ```
-NotifyFlash.exe --self-test D1 D2 D3 D4 D5 C3 C4 S1 S2 A1 A2 A3 A4 A5 A6 C1 C2 R1 P1 P2 P3 I1 I2 I3
+NotifyFlash.exe --self-test D1 D2 D3 D4 D5 C3 C4 C7 S1 S2 A1 A2 A3 A4 A5 A6 C1 C2 R1 P1 P2 P3 I1 I2 I3
 ```
+
+C7 は太い発光帯が重なる場合の中央の不透明度、奇数寸法での中央の描画、通常サイズでの中央の透明性を検査する。
 
 E1〜E6 は Mac の AXDescription 解析用なので、Windows 版が構造化データを使うなら対象外。文字列解析を残す場合のみ移植する。
 

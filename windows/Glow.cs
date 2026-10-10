@@ -116,7 +116,7 @@ sealed class Glow : Form
     {
         int w = size.Width, h = size.Height;
         var depth = (int)Math.Ceiling(scale * style switch { GlowStyle.Breath => 160, GlowStyle.Orbit => 36, _ => 64 });
-        depth = Math.Max(1, Math.Min(depth, Math.Min(w, h) / 2));
+        depth = Math.Max(1, Math.Min(depth, Math.Max(w, h)));
         var near = new double[depth];
         var far = new double[depth];
         for (int d = 0; d < depth; d++)
@@ -408,6 +408,20 @@ sealed class Glow : Form
             && Near(Lobe(0), 1) && Near(Lobe(0.25), 0) && Near(Lobe(0.5), 1) && Near(Radial(0.5), 1) && Near(Radial(1.2), 0)
             && ShadowEdge(0, 40) > 0.49 && ShadowEdge(0, 40) < 0.51 && ShadowEdge(80, 40) < 0.001
             && Soft(1, 1) > Soft(0.5, 0) && Near(Soft(0, 0), 0),
+        ["C7"] = () =>
+        {
+            foreach (var (size, expected) in new[] {
+                (new Size(1920, 1080), 0.45240025), (new Size(1920, 1081), 0.45165975),
+                (new Size(1080, 1920), 0.45240025), (new Size(1081, 1920), 0.45165975) })
+            {
+                var plan = BuildPlan(GlowStyle.Breath, size, 5);
+                var index = Array.IndexOf(plan.Index, (size.Height / 2) * size.Width + size.Width / 2);
+                if (index < 0 || Math.Abs(plan.Base[index] - expected) > 1e-6
+                    || plan.Index.Distinct().Count() != plan.Index.Length) return false;
+            }
+            var normal = BuildPlan(GlowStyle.Breath, new Size(1920, 1080), 1);
+            return Array.IndexOf(normal.Index, 540 * 1920 + 960) < 0;
+        },
         ["S1"] = () => PickScreen(new Point(500, 1100), [new(0, 0, 1000, 800), new(0, 800, 1000, 600)]) == 1
             && PickScreen(new Point(500, 400), [new(0, 0, 1000, 800), new(0, 800, 1000, 600)]) == 0
             && PickScreen(new Point(250, 50), [new(0, 0, 100, 100), new(200, 0, 100, 100)]) == 1,
