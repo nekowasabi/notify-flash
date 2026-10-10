@@ -10,6 +10,7 @@ struct Config: Codable {
     var apps: [String: String]
     var rules: [Rule]? = nil
     var style: String? = nil
+    var size: Double? = nil
 }
 
 let configURL = FileManager.default.homeDirectoryForCurrentUser
@@ -135,6 +136,16 @@ let configSelfTests: [String: () -> Bool] = [
                 guard loadConfig(at: url)?.count == expected else { return false }
             }
             return true
+        }
+    },
+    "C6": {
+        withConfigTest { url in
+            for (size, expected) in [("2", 2.0), ("0.5", 0.5), ("0.25", 0.25), ("5", 5.0), ("0.1", 1.0), ("6", 1.0), ("null", 1.0)] {
+                try Data("{\"count\":3,\"apps\":{},\"size\":\(size)}".utf8).write(to: url)
+                guard let config = loadConfig(at: url), glowSize(config.size) == CGFloat(expected) else { return false }
+            }
+            try Data("{\"count\":3,\"apps\":{}}".utf8).write(to: url)
+            return loadConfig(at: url).map { glowSize($0.size) } == 1
         }
     }
 ]

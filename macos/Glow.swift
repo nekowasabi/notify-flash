@@ -20,6 +20,12 @@ func glowStyle(_ name: String?) -> GlowStyle {
     GlowStyle(rawValue: name ?? "") ?? .soft
 }
 
+// Why: One multiplier scales every style's lengths (glow radius, gradient depth, band width) alike; out of range falls back to 1 like count.
+func glowSize(_ value: Double?) -> CGFloat {
+    guard let value, (0.25...5).contains(value) else { return 1 }
+    return CGFloat(value)
+}
+
 func flashCount(count: Int, reduceMotion: Bool) -> Int {
     reduceMotion ? 1 : max(0, count)
 }
@@ -91,11 +97,11 @@ private func innerGlow(_ bounds: CGRect, color: CGColor, radius: CGFloat) -> CAL
     return layer
 }
 
-private func softGlow(_ bounds: CGRect, color: CGColor) -> CALayer {
+private func softGlow(_ bounds: CGRect, color: CGColor, size: CGFloat) -> CALayer {
     let layer = CALayer()
     layer.frame = bounds
-    layer.addSublayer(innerGlow(bounds, color: color, radius: 40))
-    layer.addSublayer(innerGlow(bounds, color: color, radius: 8))
+    layer.addSublayer(innerGlow(bounds, color: color, radius: 40 * size))
+    layer.addSublayer(innerGlow(bounds, color: color, radius: 8 * size))
     return layer
 }
 
@@ -138,15 +144,15 @@ private func pulse(count: Int, cycle: Double, rise: Double, peak: Float) -> CAKe
     return animation
 }
 
-private func glowLayer(style: GlowStyle, bounds b: CGRect, color: CGColor, count: Int) -> CALayer {
+private func glowLayer(style: GlowStyle, bounds b: CGRect, color: CGColor, count: Int, size: CGFloat) -> CALayer {
     let black = CGColor(gray: 0, alpha: 1)
     let layer: CALayer
     switch style {
     case .soft:
-        layer = softGlow(b, color: color)
+        layer = softGlow(b, color: color, size: size)
         layer.add(pulse(count: count, cycle: style.cycle, rise: 1.0 / 3, peak: 1), forKey: "glow")
     case .breath:
-        layer = edgeGradients(b, color: color, depth: 160)
+        layer = edgeGradients(b, color: color, depth: 160 * size)
         layer.add(pulse(count: count, cycle: style.cycle, rise: 0.5, peak: 0.85), forKey: "glow")
     case .orbit:
         layer = CALayer()
@@ -169,14 +175,14 @@ private func glowLayer(style: GlowStyle, bounds b: CGRect, color: CGColor, count
         conic.add(spin, forKey: "spin")
         layer.addSublayer(conic)
         // Why: Gradient edges as the mask keep the band soft without Core Image filters.
-        layer.mask = edgeGradients(b, color: black, depth: 36)
+        layer.mask = edgeGradients(b, color: black, depth: 36 * size)
         let fade = CAKeyframeAnimation(keyPath: "opacity")
         fade.values = [0, 1, 1, 0]
         fade.keyTimes = [0, 0.1, 0.8, 1]
         fade.duration = glowDuration(style: style, count: count)
         layer.add(fade, forKey: "glow")
     case .corner:
-        layer = softGlow(b, color: color)
+        layer = softGlow(b, color: color, size: size)
         let diameter = hypot(b.width, b.height) * 2
         let mask = CAGradientLayer()
         mask.type = .radial
@@ -206,7 +212,7 @@ private func glowLayer(style: GlowStyle, bounds b: CGRect, color: CGColor, count
     return layer
 }
 
-func flash(color: NSColor, count: Int, style: GlowStyle = .soft) {
+func flash(color: NSColor, count: Int, style: GlowStyle = .soft, size: CGFloat = 1) {
     glowGeneration += 1
     let generation = glowGeneration
     glowWindow?.orderOut(nil)
@@ -231,7 +237,7 @@ func flash(color: NSColor, count: Int, style: GlowStyle = .soft) {
     CATransaction.setDisableActions(true)
     root.sublayers?.forEach { $0.removeFromSuperlayer() }
     let layer = glowLayer(style: style, bounds: CGRect(origin: .zero, size: screen.frame.size),
-                          color: color.withAlphaComponent(glowOpacity).cgColor, count: n)
+                          color: color.withAlphaComponent(glowOpacity).cgColor, count: n, size: size)
     root.addSublayer(layer)
     CATransaction.commit()
     glowWindow?.orderFrontRegardless()
@@ -259,6 +265,8 @@ let glowSelfTests: [String: () -> Bool] = [
     "C4": {
         glowOpacity == 0.8 && glowStyle(nil) == .soft && glowStyle("bad") == .soft
             && glowStyle("breath") == .breath && glowStyle("orbit") == .orbit && glowStyle("corner") == .corner
+            && glowSize(nil) == 1 && glowSize(2) == 2 && glowSize(0.25) == 0.25 && glowSize(5) == 5
+            && glowSize(0.1) == 1 && glowSize(6) == 1
     },
     "S1": {
         let frames = [CGRect(x: 0, y: 0, width: 1000, height: 800), CGRect(x: 0, y: 800, width: 1000, height: 600)]

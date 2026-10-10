@@ -29,7 +29,7 @@ func handleBanner(app: String, text: String) {
     let config = loadConfig(at: configURL)
     guard let request = glowRequest(app: app, text: text, enabled: glowEnabled, config: config),
           let color = parseHexColor(request.color) else { return }
-    flash(color: color, count: request.count, style: glowStyle(config?.style))
+    flash(color: color, count: request.count, style: glowStyle(config?.style), size: glowSize(config?.size))
 }
 
 func integrationSelfTests() -> [String: () -> Bool] {
@@ -56,7 +56,8 @@ if CommandLine.arguments.dropFirst().first == "--flash-test" {
     guard (3...4).contains(args.count), let color = parseHexColor(args[2]) else { exit(2) }
     let style = glowStyle(args.count == 4 ? args[3] : nil)
     NSApplication.shared.setActivationPolicy(.accessory)
-    flash(color: color, count: 1, style: style)
+    // Why: Reads "size" from the config so it can be checked without a real notification (same as Windows).
+    flash(color: color, count: 1, style: style, size: glowSize(loadConfig(at: configURL)?.size))
     let duration = glowDuration(style: style, count: 1)
     DispatchQueue.main.asyncAfter(deadline: .now() + duration + 0.1) { exit(0) }
     NSApplication.shared.run()
