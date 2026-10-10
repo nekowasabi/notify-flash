@@ -131,7 +131,7 @@ let configSelfTests: [String: () -> Bool] = [
     },
     "C2": {
         withConfigTest { url in
-            for (count, expected) in [(0, 3), (11, 3), (5, 5), (1, 1), (10, 10)] {
+            for (count, expected) in [(0, 3), (11, 3), (5, 5), (1, 1), (10, 10), (2147483648, 3), (-2147483649, 3), (Int.min, 3), (Int.max, 3)] {
                 try Data("{\"count\":\(count),\"apps\":{}}".utf8).write(to: url)
                 guard loadConfig(at: url)?.count == expected else { return false }
             }

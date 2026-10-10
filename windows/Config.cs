@@ -52,8 +52,8 @@ sealed record Config(int Count, Dictionary<string, string> Apps, List<Rule> Rule
         {
             using var document = JsonDocument.Parse(File.ReadAllText(path));
             var root = document.RootElement;
-            var count = root.GetProperty("count").GetInt32();
-            if (count is < 1 or > 10) count = 3;
+            var configuredCount = root.GetProperty("count").GetInt64();
+            var count = configuredCount is >= 1 and <= 10 ? (int)configuredCount : 3;
             var apps = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var app in root.GetProperty("apps").EnumerateObject())
             {
