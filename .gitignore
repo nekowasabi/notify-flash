@@ -5,3 +5,5 @@ poc/notify-flash-poc
 .DS_Store
 windows/bin/
 windows/obj/
+
+__pycache__/
