@@ -116,7 +116,7 @@ sealed class Glow : Form
     {
         int w = size.Width, h = size.Height;
         var depth = (int)Math.Ceiling(scale * style switch { GlowStyle.Breath => 160, GlowStyle.Orbit => 36, _ => 64 });
-        depth = Math.Max(1, Math.Min(depth, Math.Min(w, h) / 2));
+        depth = Math.Max(1, Math.Min(depth, Math.Max(w, h)));
         var near = new double[depth];
         var far = new double[depth];
         for (int d = 0; d < depth; d++)
@@ -409,10 +409,12 @@ sealed class Glow : Form
             && Soft(1, 1) > Soft(0.5, 0) && Near(Soft(0, 0), 0),
         ["C7"] = () =>
         {
-            foreach (var (height, expected) in new[] { (1080, 0.45240025), (1081, 0.45165975) })
+            foreach (var (size, expected) in new[] {
+                (new Size(1920, 1080), 0.45240025), (new Size(1920, 1081), 0.45165975),
+                (new Size(1080, 1920), 0.45240025), (new Size(1081, 1920), 0.45165975) })
             {
-                var plan = BuildPlan(GlowStyle.Breath, new Size(1920, height), 5);
-                var index = Array.IndexOf(plan.Index, (height / 2) * 1920 + 960);
+                var plan = BuildPlan(GlowStyle.Breath, size, 5);
+                var index = Array.IndexOf(plan.Index, (size.Height / 2) * size.Width + size.Width / 2);
                 if (index < 0 || Math.Abs(plan.Base[index] - expected) > 1e-6
                     || plan.Index.Distinct().Count() != plan.Index.Length) return false;
             }
