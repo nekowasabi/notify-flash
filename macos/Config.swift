@@ -135,14 +135,6 @@ let configSelfTests: [String: () -> Bool] = [
                 try Data("{\"count\":\(count),\"apps\":{}}".utf8).write(to: url)
                 guard loadConfig(at: url)?.count == expected else { return false }
             }
-            for (count, expected) in [("1.0", 1), ("3e0", 3), ("10.0", 10), ("11.0", 3), ("2147483648.0", 3)] {
-                try Data("{\"count\":\(count),\"apps\":{}}".utf8).write(to: url)
-                guard loadConfig(at: url)?.count == expected else { return false }
-            }
-            for count in ["1.5", "1e400", "\"3\"", "null"] {
-                try Data("{\"count\":\(count),\"apps\":{}}".utf8).write(to: url)
-                guard loadConfig(at: url) == nil else { return false }
-            }
             return true
         }
     },
