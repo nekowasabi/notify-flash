@@ -238,6 +238,7 @@ sealed class Glow : Form
     {
         if (string.IsNullOrWhiteSpace(name)) return null;
         var wanted = name.Trim().TrimStart('\\', '.');
+        if (wanted.Length == 0) return null;
         var index = Array.FindIndex(displays, d => string.Equals(d.Device.TrimStart('\\', '.'), wanted, StringComparison.OrdinalIgnoreCase));
         if (index < 0) index = Array.FindIndex(displays, d => d.Monitor.Contains(wanted, StringComparison.OrdinalIgnoreCase));
         return index < 0 ? null : index;
@@ -415,7 +416,8 @@ sealed class Glow : Form
             (string, string)[] displays = [(@"\\.\DISPLAY1", "EB321HQU"), (@"\\.\DISPLAY4", "HP U32 4K HDR"), (@"\\.\DISPLAY10", "DISPLAY1 Mirror")];
             return PickDisplay("DISPLAY4", displays) == 1 && PickDisplay(@"\\.\display1", displays) == 0
                 && PickDisplay("hp u32", displays) == 1 && PickDisplay("DISPLAY1", displays) == 0
-                && PickDisplay("DISPLAY9", displays) == null && PickDisplay(null, displays) == null && PickDisplay("  ", displays) == null;
+                && PickDisplay("DISPLAY9", displays) == null && PickDisplay(null, displays) == null && PickDisplay("  ", displays) == null
+                && new[] { ".", "\\", @"\\.\", "..." }.All(name => PickDisplay(name, displays) == null);
         },
         ["S2"] = () => PickScreen(null, [new(0, 0, 1000, 800)]) == 0
             && PickScreen(new Point(-1, 400), [new(0, 0, 1000, 800)]) == 0
