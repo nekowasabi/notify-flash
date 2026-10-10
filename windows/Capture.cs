@@ -70,7 +70,11 @@ sealed class Capture : IDisposable
         {
             var notification = sender.GetNotification(args.UserNotificationId);
             if (notification == null) return;
-            var app = notification.AppInfo?.DisplayInfo?.DisplayName;
+            string? app;
+            // Why: AppInfo throws E_NOTIMPL when the sender's AppUserModelId is unregistered (Claude Code hooks toast as
+            // "Claude Code" via PowerShell, portable WezTerm); keep the text so "rules" can still match it.
+            try { app = notification.AppInfo?.DisplayInfo?.DisplayName; }
+            catch (NotImplementedException) { app = ""; }
             var binding = notification.Notification.Visual.GetBinding(KnownNotificationBindings.ToastGeneric);
             if (binding == null) return;
             var texts = binding.GetTextElements().Select(t => t.Text).ToArray();
@@ -82,8 +86,7 @@ sealed class Capture : IDisposable
         }
         catch (Exception e)
         {
-            // Why: AppInfo throws E_NOTIMPL for senders whose AppUserModelId is not registered (e.g. portable WezTerm).
-            if (!disposed) Program.Log($"通知抽出失敗: {e.GetType().Name} HResult=0x{e.HResult:X8}: {e.Message}（送信元の AppUserModelId が未登録の可能性）");
+            if (!disposed) Program.Log($"通知抽出失敗: {e.GetType().Name} HResult=0x{e.HResult:X8}: {e.Message}");
         }
     }
 

@@ -21,7 +21,7 @@ macOS 版と同じ体験を Windows で実現する。通知バナーが出た�
 
 （2026-10-10 変更）描画は macOS 版 0e01eb0 に合わせて 4 スタイル（`soft` 既定 / `breath` / `orbit` / `corner`）。設定 `"style"`、`--flash-test '#RRGGBB' [style]`。`UpdateLayeredWindow` で画素ごとの不透明度を毎フレーム描く。`corner` は Windows のトースト位置に合わせて右下から広がる（macOS は右上）。
 
-（2026-10-10 追加）設定 `"display"` で光らせるディスプレイを固定できる。値はデバイス名（`"DISPLAY4"`、完全一致）かモニタ名の部分一致（`"HP U32"`、大文字小文字無視）。DISPLAYn はモニタ再接続で番号が変わり、Windows 設定の表示番号とも一致しないため、モニタ名を推奨する。一覧は `NotifyFlash.exe --list-displays`。未指定・該当なしはフォーカス中の画面。設定 `"size"`（既定 1、0.25〜5、範囲外・数値以外は 1）は全スタイルの長さ（にじみ半径・奥行き・帯幅）に掛ける倍率。AppUserModelId が未登録の送信元（ポータブル版 WezTerm など）は `UserNotification.AppInfo` が E_NOTIMPL になり捕捉できない。`HKCU\Software\Classes\AppUserModelId\org.wezfurlong.wezterm` に `DisplayName=WezTerm` を登録すると送信元名 `WezTerm` で届く（2026-10-10 実機確認）。
+（2026-10-10 追加）設定 `"display"` で光らせるディスプレイを固定できる。値はデバイス名（`"DISPLAY4"`、完全一致）かモニタ名の部分一致（`"HP U32"`、大文字小文字無視）。DISPLAYn はモニタ再接続で番号が変わり、Windows 設定の表示番号とも一致しないため、モニタ名を推奨する。一覧は `NotifyFlash.exe --list-displays`。未指定・該当なしはフォーカス中の画面。設定 `"size"`（既定 1、0.25〜5、範囲外・数値以外は 1）は全スタイルの長さ（にじみ半径・奥行き・帯幅）に掛ける倍率。AppUserModelId が未登録の送信元（ポータブル版 WezTerm など）は `UserNotification.AppInfo` が E_NOTIMPL になる。その場合は送信元名を空にしてタイトル・本文の `rules` だけで判定する（Claude Code フックの PowerShell トースト `'Claude Code'` もこれに当たる）。`apps` で照合したい送信元は`HKCU\Software\Classes\AppUserModelId\org.wezfurlong.wezterm` に `DisplayName=WezTerm` を登録すると送信元名 `WezTerm` で届く（2026-10-10 実機確認）。
 
 ## 最大の未確定事項と検証順
 

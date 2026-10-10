@@ -122,7 +122,7 @@ sealed class Resident : ApplicationContext
         icon = new NotifyIcon { Icon = SystemIcons.Information, Text = "Notify Flash", ContextMenuStrip = menu, Visible = true };
         capture = new Capture(dispatcher, banner =>
         {
-            Program.Log("通知: " + banner.App);
+            Program.Log("通知: " + (banner.App == "" ? "(送信元不明) " + banner.Title : banner.App));
             var config = Config.Load(Config.CurrentPath());
             var request = Program.GlowRequest(banner.App!, banner.Title, banner.Body, enabled, config);
             if (request is { } flash && Glow.ParseHex(flash.Color) is Color color) glow.Flash(color, flash.Count, Glow.ParseStyle(config?.Style), config?.Display, config?.Size ?? 1);
