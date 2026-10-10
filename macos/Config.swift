@@ -37,7 +37,10 @@ func ensureDefaultConfig(at url: URL) {
         do {
             try Data("{\"count\":3,\"apps\":{}}".utf8).write(to: url, options: .withoutOverwriting)
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError {
-            return
+            // Why: A directory at config.json is a creation failure, not an existing configuration.
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue { return }
+            throw error
         }
     } catch {
         FileHandle.standardError.write(Data("既定の設定ファイルを作成できません\n".utf8))
@@ -139,6 +142,19 @@ let configSelfTests: [String: () -> Bool] = [
             }) else { return false }
             return try result.passed && result.message == "既定の設定ファイルを作成できません\n"
                 && Data(contentsOf: parent) == data
+        }
+    },
+    "A8": {
+        withConfigTest { url in
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            guard let result = captureConfigErrors({
+                ensureDefaultConfig(at: url)
+                return true
+            }) else { return false }
+            var isDirectory: ObjCBool = false
+            return result.message == "既定の設定ファイルを作成できません\n"
+                && FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                && isDirectory.boolValue
         }
     },
     "C1": {
