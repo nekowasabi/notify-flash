@@ -34,10 +34,12 @@ func ensureDefaultConfig(at url: URL) {
     do {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         // Why: Exclusive creation preserves an existing config even if another process creates it concurrently.
-        try Data("{\"count\":3,\"apps\":{}}".utf8).write(to: url, options: .withoutOverwriting)
+        do {
+            try Data("{\"count\":3,\"apps\":{}}".utf8).write(to: url, options: .withoutOverwriting)
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError {
+            return
+        }
     } catch {
-        let error = error as NSError
-        if error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError { return }
         FileHandle.standardError.write(Data("既定の設定ファイルを作成できません\n".utf8))
     }
 }
@@ -117,9 +119,12 @@ let configSelfTests: [String: () -> Bool] = [
         withConfigTest { url in
             let data = Data("{\"count\":5,\"apps\":{\"Keep\":\"#112233\"}}".utf8)
             try data.write(to: url)
-            ensureDefaultConfig(at: url)
-            ensureDefaultConfig(at: url)
-            return try Data(contentsOf: url) == data
+            guard let result = captureConfigErrors({
+                ensureDefaultConfig(at: url)
+                ensureDefaultConfig(at: url)
+                return true
+            }) else { return false }
+            return try result.message.isEmpty && Data(contentsOf: url) == data
         }
     },
     "A7": {

@@ -75,6 +75,7 @@ Windows 版は後続計画とし、設定形式 JSON を System.Text.Json でも
 | A4 | ファイルなし → `{"count":3,"apps":{}}` を生成し発光しない |
 | A5 | 壊れた JSON → nil、発光しない |
 | A6 | 既存ファイルに既定生成を呼ぶ → 内容が変わらない |
+| A7 | 設定の親パスが既存ファイル → 作成失敗を stderr に 1 行出し、既存ファイルを保持する |
 | C1 | 2 アプリに別色 → それぞれの色 |
 | C2 | count 0 / 11 → 3、5 → 5。全体共通でアプリ別カウンタなし |
 | I1 | ON・対象アプリ → 色と count 付き発光要求 |
@@ -86,7 +87,7 @@ Windows 版は後続計画とし、設定形式 JSON を System.Text.Json でも
 機械検証は次の 1 行が終了コード 0 になること。自己テストだけで実機の AX・描画挙動を確認したとは扱わない。
 
 ```sh
-make all && macos/notify-flash --self-test E1 E2 E3 E4 E5 E6 D1 D2 D3 D4 D5 C3 C4 S1 S2 A1 A2 A3 A4 A5 A6 C1 C2 C6 R1 I1 I2 I3
+make all && macos/notify-flash --self-test E1 E2 E3 E4 E5 E6 D1 D2 D3 D4 D5 C3 C4 S1 S2 A1 A2 A3 A4 A5 A6 A7 C1 C2 C6 R1 I1 I2 I3
 ```
 
 - （2026-10-10 変更）発光は 4 スタイル（`soft` 既定 / `breath` / `orbit` / `corner`）を Core Animation のなめらかなアニメーションで描く。設定 `"style"` で選び、不正値は `soft`。C3 は回数と所要時間、C4 は不透明度とスタイル解決を検査する。`--flash-test '#RRGGBB' [style]`。
