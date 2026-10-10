@@ -52,8 +52,8 @@ sealed record Config(int Count, Dictionary<string, string> Apps, List<Rule> Rule
         {
             using var document = JsonDocument.Parse(File.ReadAllText(path));
             var root = document.RootElement;
-            var count = root.GetProperty("count").GetInt32();
-            if (count is < 1 or > 10) count = 3;
+            var configuredCount = root.GetProperty("count").GetInt64();
+            var count = configuredCount is >= 1 and <= 10 ? (int)configuredCount : 3;
             var apps = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var app in root.GetProperty("apps").EnumerateObject())
             {
@@ -136,7 +136,7 @@ sealed record Config(int Count, Dictionary<string, string> Apps, List<Rule> Rule
             return File.ReadAllText(path) == json;
         }),
         ["C1"] = () => WithConfig("{\"count\":3,\"apps\":{\"First\":\"#FF8800\",\"Second\":\"#112233\",\"Bad\":\"#FFF\"}}", c => c?.ColorFor("First", "") == "#FF8800" && c.ColorFor("Second", "") == "#112233" && c.ColorFor("Bad", "") == null),
-        ["C2"] = () => new[] { (0, 3), (11, 3), (5, 5), (1, 1), (10, 10) }.All(pair => WithConfig($"{{\"count\":{pair.Item1},\"apps\":{{}}}}", c => c?.Count == pair.Item2)),
+        ["C2"] = () => new (long, int)[] { (0, 3), (11, 3), (5, 5), (1, 1), (10, 10), (2147483648, 3), (-2147483649, 3), (long.MinValue, 3), (long.MaxValue, 3) }.All(pair => WithConfig($"{{\"count\":{pair.Item1},\"apps\":{{}}}}", c => c?.Count == pair.Item2)),
         ["C6"] = () => new[] { ("2", 2.0), ("0.5", 0.5), ("0.25", 0.25), ("5", 5.0), ("0.1", 1.0), ("6", 1.0), ("\"big\"", 1.0), ("null", 1.0) }
             .All(pair => WithConfig($"{{\"count\":3,\"apps\":{{}},\"size\":{pair.Item1}}}", c => c?.Size == pair.Item2))
             && WithConfig("{\"count\":3,\"apps\":{}}", c => c?.Size == 1),
