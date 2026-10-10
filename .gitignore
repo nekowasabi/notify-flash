@@ -3,3 +3,5 @@ macos/NotifyFlash.app/
 poc/notify-flash-poc
 .ooda/
 .DS_Store
+windows/bin/
+windows/obj/
