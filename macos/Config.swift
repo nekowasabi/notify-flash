@@ -34,10 +34,15 @@ func ensureDefaultConfig(at url: URL) {
     do {
         try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         // Why: Exclusive creation preserves an existing config even if another process creates it concurrently.
-        try Data("{\"count\":3,\"apps\":{}}".utf8).write(to: url, options: .withoutOverwriting)
+        do {
+            try Data("{\"count\":3,\"apps\":{}}".utf8).write(to: url, options: .withoutOverwriting)
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError {
+            // Why: A directory at config.json is a creation failure, not an existing configuration.
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && !isDirectory.boolValue { return }
+            throw error
+        }
     } catch {
-        let error = error as NSError
-        if error.domain == NSCocoaErrorDomain && error.code == NSFileWriteFileExistsError { return }
         FileHandle.standardError.write(Data("既定の設定ファイルを作成できません\n".utf8))
     }
 }
@@ -45,6 +50,19 @@ func ensureDefaultConfig(at url: URL) {
 // Why: Claude Code の通知は terminal-notifier 経由で届き送信元名では区別できないため、タイトル・本文の文字列ルールを送信元名より優先する。
 func colorFor(_ appName: String, text: String = "", in config: Config) -> String? {
     config.rules?.first { text.contains($0.contains) }?.color ?? config.apps[appName]
+}
+
+private func captureConfigErrors(_ body: () -> Bool) -> (passed: Bool, message: String)? {
+    let pipe = Pipe()
+    let original = dup(STDERR_FILENO)
+    guard original >= 0 else { return nil }
+    defer { _ = dup2(original, STDERR_FILENO); close(original) }
+    guard dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO) >= 0 else { return nil }
+    let passed = body()
+    guard dup2(original, STDERR_FILENO) >= 0 else { return nil }
+    pipe.fileHandleForWriting.closeFile()
+    let message = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+    return (passed, message)
 }
 
 private func withConfigTest(_ body: (URL) throws -> Bool) -> Bool {
@@ -95,16 +113,48 @@ let configSelfTests: [String: () -> Bool] = [
         withConfigTest { url in
             let data = Data("{".utf8)
             try data.write(to: url)
-            return try loadConfig(at: url) == nil && Data(contentsOf: url) == data
+            guard let result = captureConfigErrors({ loadConfig(at: url) == nil }) else { return false }
+            return try result.passed && result.message == "設定ファイルを読み込めません\n"
+                && Data(contentsOf: url) == data
         }
     },
     "A6": {
         withConfigTest { url in
             let data = Data("{\"count\":5,\"apps\":{\"Keep\":\"#112233\"}}".utf8)
             try data.write(to: url)
-            ensureDefaultConfig(at: url)
-            ensureDefaultConfig(at: url)
-            return try Data(contentsOf: url) == data
+            guard let result = captureConfigErrors({
+                ensureDefaultConfig(at: url)
+                ensureDefaultConfig(at: url)
+                return true
+            }) else { return false }
+            return try result.message.isEmpty && Data(contentsOf: url) == data
+        }
+    },
+    "A7": {
+        withConfigTest { url in
+            let parent = url.deletingLastPathComponent().appendingPathComponent("blocked")
+            let data = Data("keep this file".utf8)
+            try data.write(to: parent)
+            let target = parent.appendingPathComponent("config.json")
+            guard let result = captureConfigErrors({
+                ensureDefaultConfig(at: target)
+                return !FileManager.default.fileExists(atPath: target.path)
+            }) else { return false }
+            return try result.passed && result.message == "既定の設定ファイルを作成できません\n"
+                && Data(contentsOf: parent) == data
+        }
+    },
+    "A8": {
+        withConfigTest { url in
+            try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+            guard let result = captureConfigErrors({
+                ensureDefaultConfig(at: url)
+                return true
+            }) else { return false }
+            var isDirectory: ObjCBool = false
+            return result.message == "既定の設定ファイルを作成できません\n"
+                && FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
+                && isDirectory.boolValue
         }
     },
     "C1": {
