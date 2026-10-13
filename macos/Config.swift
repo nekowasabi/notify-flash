@@ -11,6 +11,21 @@ struct Config: Codable {
     var rules: [Rule]? = nil
     var style: String? = nil
     var size: Double? = nil
+    var display: DisplaySpec? = nil
+}
+
+// Why: Accept both 2 and "2"; a bare number must not make the whole config fail to decode.
+struct DisplaySpec: Codable {
+    let value: String
+    init(_ value: String) { self.value = value }
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let number = try? container.decode(Int.self) { value = String(number) } else { value = try container.decode(String.self) }
+    }
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
+    }
 }
 
 let configURL = FileManager.default.homeDirectoryForCurrentUser

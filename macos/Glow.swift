@@ -43,6 +43,13 @@ func pickScreen(point: CGPoint?, frames: [CGRect]) -> Int {
     return frames.firstIndex(where: { $0.contains(point) }) ?? 0
 }
 
+// Why: A number (1 = main display, as listed by --list-displays) works on any machine; a name substring survives reconnects.
+func pickNamedScreen(_ display: String?, names: [String]) -> Int? {
+    guard let display, !display.isEmpty else { return nil }
+    if let number = Int(display) { return (1...names.count).contains(number) ? number - 1 : nil }
+    return names.firstIndex { $0.range(of: display, options: .caseInsensitive) != nil }
+}
+
 func parseHexColor(_ s: String) -> NSColor? {
     let bytes = Array(s.utf8)
     guard bytes.count == 7, bytes[0] == 35,
@@ -212,13 +219,13 @@ private func glowLayer(style: GlowStyle, bounds b: CGRect, color: CGColor, count
     return layer
 }
 
-func flash(color: NSColor, count: Int, style: GlowStyle = .soft, size: CGFloat = 1) {
+func flash(color: NSColor, count: Int, style: GlowStyle = .soft, size: CGFloat = 1, display: String? = nil) {
     glowGeneration += 1
     let generation = glowGeneration
     glowWindow?.orderOut(nil)
     let screens = NSScreen.screens
     guard !screens.isEmpty else { return }
-    let screen = screens[focusedScreenIndex()]
+    let screen = screens[pickNamedScreen(display, names: screens.map(\.localizedName)) ?? focusedScreenIndex()]
     if glowWindow == nil {
         let window = NSWindow(contentRect: screen.frame, styleMask: .borderless, backing: .buffered, defer: false)
         window.isOpaque = false
@@ -282,5 +289,25 @@ let glowSelfTests: [String: () -> Bool] = [
         return pickScreen(point: nil, frames: frames) == 0
             && pickScreen(point: CGPoint(x: -1, y: 400), frames: frames) == 0
             && pickScreen(point: CGPoint(x: 500, y: 2000), frames: frames) == 0
+    },
+    "S3": {
+        let names = ["Color LCD", "HP U32 4K HDR", "EB321HQU"]
+        return pickNamedScreen("hp u32", names: names) == 1 && pickNamedScreen("EB321", names: names) == 2
+            && pickNamedScreen(nil, names: names) == nil && pickNamedScreen("", names: names) == nil
+            && pickNamedScreen("Missing", names: names) == nil
+            && pickNamedScreen("1", names: names) == 0 && pickNamedScreen("3", names: names) == 2
+            && pickNamedScreen("0", names: names) == nil && pickNamedScreen("4", names: names) == nil
+            && pickNamedScreen("-1", names: names) == nil
+    },
+    "S4": {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("config.json")
+        for (json, expected) in [("2", "2"), ("\"2\"", "2"), ("\"HP U32\"", "HP U32")] {
+            guard (try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)) != nil,
+                  (try? Data("{\"count\":3,\"apps\":{},\"display\":\(json)}".utf8).write(to: url)) != nil,
+                  loadConfig(at: url)?.display?.value == expected else { return false }
+        }
+        return true
     }
 ]
